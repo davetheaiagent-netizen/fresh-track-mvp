@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { Text, Button, Chip, SegmentedButtons, Card } from 'react-native-paper';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { View, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { Text, Button, Chip, SegmentedButtons, Card, Snackbar } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { useRecipes } from '../hooks/useRecipes';
 import { useItems } from '../hooks/useItems';
+import { useShoppingList } from '../hooks/useShoppingList';
 import { RecipeCard } from '../components/RecipeCard';
-import { DietaryTag } from '../types';
+import { DietaryTag, Recipe } from '../types';
+import { generateMissingIngredients } from '../utils/shoppingList';
 
 const dietaryOptions = [
   { value: 'none', label: 'Any' },
@@ -25,10 +27,13 @@ export default function RecipesScreen() {
   const router = useRouter();
   const { items } = useItems();
   const { recipes, loading, error, fetchRecipes } = useRecipes();
+  const { addFromMissingIngredients } = useShoppingList();
   
   const [dietaryFilter, setDietaryFilter] = useState<string>('none');
   const [maxTime, setMaxTime] = useState<string>('60');
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   const handleGenerateRecipes = async () => {
     const dietary = dietaryFilter === 'none' ? [] : [dietaryFilter as DietaryTag];
@@ -38,6 +43,43 @@ export default function RecipesScreen() {
 
   const handleRegenerate = () => {
     setHasGenerated(false);
+  };
+
+  const handleAddToShoppingList = async (recipe: Recipe) => {
+    const missing = generateMissingIngredients(recipe, items);
+    if (missing.length === 0) {
+      Alert.alert('All Set!', 'You already have all the ingredients for this recipe!');
+      return;
+    }
+    
+    const added = await addFromMissingIngredients(missing);
+    setSnackbarMessage(`Added ${added.length} items to shopping list`);
+    setSnackbarVisible(true);
+  };
+
+  const handleAddAllToShoppingList = async () => {
+    if (recipes.length === 0) return;
+    
+    let totalMissing = 0;
+    for (const recipe of recipes) {
+      const missing = generateMissingIngredients(recipe, items);
+      totalMissing += missing.length;
+    }
+    
+    if (totalMissing === 0) {
+      Alert.alert('All Set!', 'You have all the ingredients for these recipes!');
+      return;
+    }
+    
+    for (const recipe of recipes) {
+      const missing = generateMissingIngredients(recipe, items);
+      if (missing.length > 0) {
+        await addFromMissingIngredients(missing);
+      }
+    }
+    
+    setSnackbarMessage(`Added all missing ingredients (${totalMissing} items)`);
+    setSnackbarVisible(true);
   };
 
   return (
@@ -119,12 +161,26 @@ export default function RecipesScreen() {
         </View>
       )}
 
+      {hasGenerated && recipes.length > 0 && (
+        <View style={styles.bulkActions}>
+          <Button
+            mode="contained"
+            onPress={handleAddAllToShoppingList}
+            style={styles.bulkButton}
+            icon="cart-plus"
+          >
+            Add All Missing to List
+          </Button>
+        </View>
+      )}
+
       <ScrollView style={styles.recipesList} showsVerticalScrollIndicator={false}>
         {recipes.map((recipe, index) => (
           <RecipeCard
             key={`${recipe.name}-${index}`}
             recipe={recipe}
             onViewDetails={() => router.push(`/recipe/${encodeURIComponent(recipe.name)}`)}
+            onAddToShoppingList={() => handleAddToShoppingList(recipe)}
           />
         ))}
         <View style={{ height: 100 }} />
@@ -137,6 +193,18 @@ export default function RecipesScreen() {
           </Button>
         </View>
       )}
+
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={3000}
+        action={{
+          label: 'View List',
+          onPress: () => router.push('/shopping'),
+        }}
+      >
+        {snackbarMessage}
+      </Snackbar>
     </View>
   );
 }
@@ -211,6 +279,13 @@ const styles = StyleSheet.create({
   noRecipesText: {
     color: '#6B7280',
     textAlign: 'center',
+  },
+  bulkActions: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  bulkButton: {
+    backgroundColor: '#3B82F6',
   },
   recipesList: {
     flex: 1,

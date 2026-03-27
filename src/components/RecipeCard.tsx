@@ -6,7 +6,7 @@ import { Recipe } from '../types';
 interface RecipeCardProps {
   recipe: Recipe;
   onViewDetails?: () => void;
-  onAddMissingIngredients?: () => void;
+  onAddToShoppingList?: () => void;
 }
 
 const dietaryColors: Record<string, string> = {
@@ -23,7 +23,7 @@ const dietaryColors: Record<string, string> = {
 export const RecipeCard: React.FC<RecipeCardProps> = ({
   recipe,
   onViewDetails,
-  onAddMissingIngredients,
+  onAddToShoppingList,
 }) => {
   const totalTime = recipe.prep_time + recipe.cook_time;
 
@@ -94,8 +94,8 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({
               View Recipe
             </Button>
           )}
-          {onAddMissingIngredients && (
-            <Button mode="contained" onPress={onAddMissingIngredients} style={styles.actionButton}>
+          {onAddToShoppingList && (
+            <Button mode="contained" onPress={onAddToShoppingList} style={styles.actionButton}>
               Add Missing to List
             </Button>
           )}
