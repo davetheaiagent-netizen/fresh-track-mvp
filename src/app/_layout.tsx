@@ -50,6 +50,14 @@ export default function RootLayout() {
           }} 
         />
         <Stack.Screen 
+          name="b2b-dashboard" 
+          options={{ 
+            headerShown: true,
+            title: 'Retail Dashboard',
+            presentation: 'card',
+          }} 
+        />
+        <Stack.Screen 
           name="auth" 
           options={{ 
             headerShown: false,
