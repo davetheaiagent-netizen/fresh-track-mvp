@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase, getCurrentUser } from '../services/supabase';
 import { Item } from '../types';
 import { sortItemsByExpiry } from '../utils/expiryCalculator';
@@ -39,7 +39,7 @@ export function useItems() {
     name: string,
     expiryDate: string,
     category?: string,
-    quantity?: number
+    quantity: number = 1
   ) => {
     try {
       const user = await getCurrentUser();
@@ -52,7 +52,7 @@ export function useItems() {
           name,
           expiry_date: expiryDate,
           category: category || null,
-          quantity: quantity || 1,
+          quantity,
         })
         .select()
         .single();
@@ -63,6 +63,48 @@ export function useItems() {
       return data;
     } catch (err: any) {
       setError(err.message || 'Failed to add item');
+      throw err;
+    }
+  }, []);
+
+  const addItemsFromReceipt = useCallback(async (
+    receiptItems: Array<{
+      name: string;
+      quantity?: number;
+      suggested_expiry_days?: number;
+      inferred_category?: string;
+    }>
+  ) => {
+    try {
+      const user = await getCurrentUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const itemsToInsert = receiptItems.map(item => {
+        const today = new Date();
+        const expiryDate = item.suggested_expiry_days
+          ? addDays(today, item.suggested_expiry_days)
+          : addDays(today, 7);
+
+        return {
+          user_id: user.id,
+          name: item.name,
+          expiry_date: expiryDate.toISOString().split('T')[0],
+          category: item.inferred_category || null,
+          quantity: item.quantity || 1,
+        };
+      });
+
+      const { data, error: insertError } = await supabase
+        .from('items')
+        .insert(itemsToInsert)
+        .select();
+
+      if (insertError) throw insertError;
+      
+      setItems(prev => sortItemsByExpiry([...prev, ...(data || [])]));
+      return data;
+    } catch (err: any) {
+      setError(err.message || 'Failed to add items from receipt');
       throw err;
     }
   }, []);
@@ -112,16 +154,13 @@ export function useItems() {
     return updateItem(id, { status: 'wasted' });
   }, [updateItem]);
 
-  useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
-
   return {
     items,
     loading,
     error,
     fetchItems,
     addItem,
+    addItemsFromReceipt,
     updateItem,
     deleteItem,
     markAsUsed,

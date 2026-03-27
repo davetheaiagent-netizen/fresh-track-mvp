@@ -6,15 +6,17 @@ import { useItems } from '../hooks/useItems';
 import { useRecipes } from '../hooks/useRecipes';
 import { ItemCard } from '../components/ItemCard';
 import { AddItemModal } from '../components/AddItemModal';
-import { ItemCategory } from '../types';
+import { ReceiptScannerModal } from '../components/ReceiptScannerModal';
+import { ItemCategory, ExtractedItem } from '../types';
 import { groupItemsByExpiry } from '../utils/expiryCalculator';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { items, loading, fetchItems, addItem, markAsUsed, markAsWasted, deleteItem } = useItems();
+  const { items, loading, fetchItems, addItem, addItemsFromReceipt, markAsUsed, markAsWasted, deleteItem } = useItems();
   const { recipes, fetchRecipes, loading: recipesLoading } = useRecipes();
   
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showUrgentBanner, setShowUrgentBanner] = useState(true);
 
@@ -33,6 +35,11 @@ export default function HomeScreen() {
 
   const handleAddItem = async (name: string, expiryDate: string, category: ItemCategory) => {
     await addItem(name, expiryDate, category);
+  };
+
+  const handleReceiptItems = async (receiptItems: ExtractedItem[]) => {
+    await addItemsFromReceipt(receiptItems);
+    setShowReceiptModal(false);
   };
 
   const handleMarkUsed = async (id: string) => {
@@ -131,10 +138,24 @@ export default function HomeScreen() {
           disabled={items.length === 0 || recipesLoading}
           label="Find Recipes"
         />
-        <FAB
+        <FAB.Group
+          open={false}
+          visible={true}
           icon="plus"
-          style={styles.fab}
-          onPress={() => setShowAddModal(true)}
+          actions={[
+            {
+              icon: 'file-document-outline',
+              label: 'Scan Receipt',
+              onPress: () => setShowReceiptModal(true),
+            },
+            {
+              icon: 'pencil-outline',
+              label: 'Add Manually',
+              onPress: () => setShowAddModal(true),
+            },
+          ]}
+          onStateChange={() => {}}
+          fabStyle={styles.fab}
         />
       </View>
 
@@ -142,6 +163,12 @@ export default function HomeScreen() {
         visible={showAddModal}
         onDismiss={() => setShowAddModal(false)}
         onSubmit={handleAddItem}
+      />
+
+      <ReceiptScannerModal
+        visible={showReceiptModal}
+        onDismiss={() => setShowReceiptModal(false)}
+        onConfirm={handleReceiptItems}
       />
     </View>
   );
@@ -211,17 +238,12 @@ const styles = StyleSheet.create({
     bottom: 24,
     right: 16,
     left: 16,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 12,
   },
   fab: {
     backgroundColor: '#22C55E',
   },
   recipeFab: {
     backgroundColor: '#3B82F6',
-    flex: 1,
-    marginRight: 12,
+    marginBottom: 70,
   },
 });
