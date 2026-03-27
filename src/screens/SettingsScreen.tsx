@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Image } from 'react-native';
-import { Text, TextInput, Button, Card, List, Divider, Switch } from 'react-native-paper';
+import { View, StyleSheet, ScrollView } from 'react-native';
+import { Text, Button, Card, List, Divider } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { signOut } from '../services/supabase';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const [notifications, setNotifications] = useState(true);
-  const [dailyDigest, setDailyDigest] = useState(true);
-  const [expiryAlerts, setExpiryAlerts] = useState(true);
 
   const handleSignOut = async () => {
     await signOut();
@@ -30,32 +27,11 @@ export default function SettingsScreen() {
           </Text>
           
           <List.Item
-            title="Push Notifications"
-            description="Receive alerts and updates"
+            title="Notification Settings"
+            description="Configure alerts and reminders"
             left={props => <List.Icon {...props} icon="bell-outline" />}
-            right={() => (
-              <Switch value={notifications} onValueChange={setNotifications} />
-            )}
-          />
-          <Divider />
-          
-          <List.Item
-            title="Daily Digest"
-            description="Morning summary of expiring items"
-            left={props => <List.Icon {...props} icon="calendar-clock" />}
-            right={() => (
-              <Switch value={dailyDigest} onValueChange={setDailyDigest} />
-            )}
-          />
-          <Divider />
-          
-          <List.Item
-            title="Expiry Alerts"
-            description="Alerts when items are about to expire"
-            left={props => <List.Icon {...props} icon="alert-circle-outline" />}
-            right={() => (
-              <Switch value={expiryAlerts} onValueChange={setExpiryAlerts} />
-            )}
+            right={props => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => router.push('/notifications')}
           />
         </Card.Content>
       </Card>

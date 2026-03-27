@@ -1,24 +1,27 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Text, FAB, Searchbar, Banner, Button } from 'react-native-paper';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useItems } from '../hooks/useItems';
 import { useRecipes } from '../hooks/useRecipes';
+import { useNotifications } from '../hooks/useNotifications';
 import { ItemCard } from '../components/ItemCard';
 import { AddItemModal } from '../components/AddItemModal';
 import { ReceiptScannerModal } from '../components/ReceiptScannerModal';
-import { ItemCategory, ExtractedItem } from '../types';
+import { ItemCategory, ExtractedItem, Item } from '../types';
 import { groupItemsByExpiry } from '../utils/expiryCalculator';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { items, loading, fetchItems, addItem, addItemsFromReceipt, markAsUsed, markAsWasted, deleteItem } = useItems();
   const { recipes, fetchRecipes, loading: recipesLoading } = useRecipes();
+  const { scheduleExpiryAlert, scheduleDailyDigest, hasPermission, requestPermissions } = useNotifications();
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showUrgentBanner, setShowUrgentBanner] = useState(true);
+  const [notificationPromptShown, setNotificationPromptShown] = useState(false);
 
   const grouped = groupItemsByExpiry(items);
   const urgentCount = grouped.expired.length + grouped.expiringToday.length + grouped.expiringSoon.length;
@@ -29,16 +32,37 @@ export default function HomeScreen() {
     }, [fetchItems])
   );
 
+  useEffect(() => {
+    if (hasPermission === false && !notificationPromptShown) {
+      setNotificationPromptShown(true);
+    }
+  }, [hasPermission, notificationPromptShown]);
+
+  useEffect(() => {
+    if (items.length > 0 && hasPermission) {
+      scheduleDailyDigest(items);
+    }
+  }, [items.length]);
+
   const filteredItems = items.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleAddItem = async (name: string, expiryDate: string, category: ItemCategory) => {
-    await addItem(name, expiryDate, category);
+    const newItem = await addItem(name, expiryDate, category);
+    if (newItem && hasPermission) {
+      await scheduleExpiryAlert(newItem as Item);
+    }
   };
 
   const handleReceiptItems = async (receiptItems: ExtractedItem[]) => {
-    await addItemsFromReceipt(receiptItems);
+    const addedItems = await addItemsFromReceipt(receiptItems);
+    if (addedItems && hasPermission) {
+      for (const item of addedItems) {
+        await scheduleExpiryAlert(item as Item);
+      }
+      await scheduleDailyDigest(addedItems as Item[]);
+    }
     setShowReceiptModal(false);
   };
 
@@ -59,6 +83,10 @@ export default function HomeScreen() {
       await fetchRecipes(items);
       router.push('/recipes');
     }
+  };
+
+  const handleEnableNotifications = async () => {
+    await requestPermissions();
   };
 
   const renderEmptyState = () => (
@@ -86,6 +114,20 @@ export default function HomeScreen() {
           {items.length} items tracked
         </Text>
       </View>
+
+      {hasPermission === false && (
+        <Banner
+          visible={true}
+          actions={[
+            { label: 'Enable', onPress: handleEnableNotifications },
+            { label: 'Later', onPress: () => setNotificationPromptShown(true) },
+          ]}
+          icon="bell-outline"
+          style={styles.notificationBanner}
+        >
+          Enable notifications to get alerted when food is about to expire!
+        </Banner>
+      )}
 
       {urgentCount > 0 && showUrgentBanner && (
         <Banner
@@ -191,6 +233,12 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#6B7280',
     marginTop: 4,
+  },
+  notificationBanner: {
+    backgroundColor: '#DBEAFE',
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 12,
   },
   urgentBanner: {
     backgroundColor: '#FEF3C7',
